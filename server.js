@@ -55,6 +55,7 @@ const collectCorsOptions = {
   },
   methods: ["POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
+  credentials: true,
 };
 
 // Explicit preflight handler — required for non-simple requests (JSON content-type)
