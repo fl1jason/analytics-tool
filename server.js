@@ -326,10 +326,20 @@ app.get("/api/email-schedules", (req, res) => {
 app.post("/api/email-schedules", (req, res) => {
   const { email, day_of_week } = req.body;
   if (!email || day_of_week === undefined) {
-    return res.status(400).json({ error: "email and day_of_week are required" });
+    return res
+      .status(400)
+      .json({ error: "email and day_of_week are required" });
   }
-  const result = insertEmailSchedule.run({ $email: email, $day_of_week: day_of_week });
-  res.json({ id: Number(result.lastInsertRowid), email, day_of_week, active: 1 });
+  const result = insertEmailSchedule.run({
+    $email: email,
+    $day_of_week: day_of_week,
+  });
+  res.json({
+    id: Number(result.lastInsertRowid),
+    email,
+    day_of_week,
+    active: 1,
+  });
 });
 
 app.put("/api/email-schedules/:id", (req, res) => {
@@ -350,7 +360,7 @@ app.delete("/api/email-schedules/:id", (req, res) => {
 
 app.post("/api/email-schedules/:id/send-now", async (req, res) => {
   const schedules = getEmailSchedules.all();
-  const schedule = schedules.find(s => s.id === Number(req.params.id));
+  const schedule = schedules.find((s) => s.id === Number(req.params.id));
   if (!schedule) return res.status(404).json({ error: "Schedule not found" });
 
   try {
@@ -379,82 +389,135 @@ app.post("/api/send-now", async (req, res) => {
 // ─── Email Summary Generation ─────────────────────────────────────────────────
 
 async function sendWeeklySummary(email) {
-  if (!process.env.SENDGRID_API_KEY) throw new Error("SENDGRID_API_KEY not configured");
-  if (!process.env.SENDGRID_FROM_EMAIL) throw new Error("SENDGRID_FROM_EMAIL not configured");
+  if (!process.env.SENDGRID_API_KEY)
+    throw new Error("SENDGRID_API_KEY not configured");
+  if (!process.env.SENDGRID_FROM_EMAIL)
+    throw new Error("SENDGRID_FROM_EMAIL not configured");
 
-  const weekStats = db.prepare(`
+  const weekStats = db
+    .prepare(
+      `
     SELECT COUNT(*) as total_visits, COUNT(DISTINCT ip) as unique_visitors,
            COUNT(DISTINCT path) as unique_pages
     FROM pageviews WHERE timestamp >= datetime('now', '-7 days')
-  `).get();
+  `,
+    )
+    .get();
 
-  const topPages = db.prepare(`
+  const topPages = db
+    .prepare(
+      `
     SELECT path, title, COUNT(*) as views FROM pageviews
     WHERE timestamp >= datetime('now', '-7 days')
     GROUP BY path ORDER BY views DESC LIMIT 5
-  `).all();
+  `,
+    )
+    .all();
 
-  const topReferrers = db.prepare(`
+  const topReferrers = db
+    .prepare(
+      `
     SELECT referrer_domain, COUNT(*) as visits FROM pageviews
     WHERE referrer_domain IS NOT NULL AND referrer_domain != ''
       AND timestamp >= datetime('now', '-7 days')
     GROUP BY referrer_domain ORDER BY visits DESC LIMIT 5
-  `).all();
+  `,
+    )
+    .all();
 
-  const topSearchTerms = db.prepare(`
+  const topSearchTerms = db
+    .prepare(
+      `
     SELECT search_terms, search_engine, COUNT(*) as count FROM pageviews
     WHERE search_terms IS NOT NULL AND timestamp >= datetime('now', '-7 days')
     GROUP BY search_terms ORDER BY count DESC LIMIT 5
-  `).all();
+  `,
+    )
+    .all();
 
-  const topCountries = db.prepare(`
+  const topCountries = db
+    .prepare(
+      `
     SELECT country, COUNT(*) as visits FROM pageviews
     WHERE country IS NOT NULL AND timestamp >= datetime('now', '-7 days')
     GROUP BY country ORDER BY visits DESC LIMIT 5
-  `).all();
+  `,
+    )
+    .all();
 
   // Generate AI insights
   const insightsRes = await anthropic.messages.create({
     model: "claude-opus-4-6",
     max_tokens: 256,
-    messages: [{
-      role: "user",
-      content: `Write 2-3 concise, friendly insights for a weekly analytics report email.
+    messages: [
+      {
+        role: "user",
+        content: `Write 2-3 concise, friendly insights for a weekly analytics report email.
 Stats for the past 7 days: total visits=${weekStats.total_visits}, unique visitors=${weekStats.unique_visitors}.
 Top pages: ${JSON.stringify(topPages.slice(0, 3))}.
 Top referrers: ${JSON.stringify(topReferrers.slice(0, 3))}.
 Top search terms: ${JSON.stringify(topSearchTerms.slice(0, 3))}.
 Plain text only, no markdown, no bullet points. 2-3 sentences.`,
-    }],
+      },
+    ],
   });
   const insights = insightsRes.content[0].text.trim();
 
   const dateRange = `${new Date(Date.now() - 7 * 86400000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
   const subject = `Weekly Analytics Summary · ${dateRange}`;
 
-  const html = buildSummaryEmail({ weekStats, topPages, topReferrers, topSearchTerms, topCountries, insights, dateRange });
+  const html = buildSummaryEmail({
+    weekStats,
+    topPages,
+    topReferrers,
+    topSearchTerms,
+    topCountries,
+    insights,
+    dateRange,
+  });
 
   await sgMail.send({
     to: email,
-    from: { email: process.env.SENDGRID_FROM_EMAIL, name: "Analytics Dashboard" },
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL,
+      name: "FL1 Analytics",
+    },
     subject,
     html,
   });
 }
 
-function buildSummaryEmail({ weekStats, topPages, topReferrers, topSearchTerms, topCountries, insights, dateRange }) {
+function buildSummaryEmail({
+  weekStats,
+  topPages,
+  topReferrers,
+  topSearchTerms,
+  topCountries,
+  insights,
+  dateRange,
+}) {
   const row = (label, value) => `
     <tr>
       <td style="padding:8px 16px;border-bottom:1px solid #2e3148;color:#8b8fa8;font-size:13px;">${label}</td>
       <td style="padding:8px 16px;border-bottom:1px solid #2e3148;color:#e2e4f0;font-size:13px;font-weight:600;text-align:right;">${value}</td>
     </tr>`;
 
-  const tableRows = (items, cols) => items.length === 0
-    ? `<tr><td colspan="${cols}" style="padding:12px 16px;color:#8b8fa8;font-size:13px;">No data this week</td></tr>`
-    : items.map((item, i) => `
+  const tableRows = (items, cols) =>
+    items.length === 0
+      ? `<tr><td colspan="${cols}" style="padding:12px 16px;color:#8b8fa8;font-size:13px;">No data this week</td></tr>`
+      : items
+          .map(
+            (item, i) => `
     <tr>
-      ${Object.values(item).map((v, j) => `<td style="padding:8px 16px;border-bottom:${i < items.length - 1 ? "1px solid #2e3148" : "none"};color:${j === 0 ? "#e2e4f0" : "#8b8fa8"};font-size:13px;${j > 0 ? "text-align:right;" : ""}">${v ?? "—"}</td>`).join("")}
-    </tr>`).join("");
+      ${Object.values(item)
+        .map(
+          (v, j) =>
+            `<td style="padding:8px 16px;border-bottom:${i < items.length - 1 ? "1px solid #2e3148" : "none"};color:${j === 0 ? "#e2e4f0" : "#8b8fa8"};font-size:13px;${j > 0 ? "text-align:right;" : ""}">${v ?? "—"}</td>`,
+        )
+        .join("")}
+    </tr>`,
+          )
+          .join("");
 
   return `<!DOCTYPE html>
 <html>
@@ -504,40 +567,62 @@ function buildSummaryEmail({ weekStats, topPages, topReferrers, topSearchTerms, 
         <tr><td style="background:#1a1d27;border-left:1px solid #2e3148;border-right:1px solid #2e3148;padding:0 32px 24px;">
           <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#8b8fa8;margin-bottom:8px;">Top Pages</div>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#222536;border-radius:6px;overflow:hidden;">
-            ${topPages.length === 0
-              ? `<tr><td style="padding:12px 16px;color:#8b8fa8;font-size:13px;">No data this week</td></tr>`
-              : topPages.map((p, i) => `<tr>
+            ${
+              topPages.length === 0
+                ? `<tr><td style="padding:12px 16px;color:#8b8fa8;font-size:13px;">No data this week</td></tr>`
+                : topPages
+                    .map(
+                      (p, i) => `<tr>
                 <td style="padding:8px 16px;border-bottom:${i < topPages.length - 1 ? "1px solid #2e3148" : "none"};color:#e2e4f0;font-size:13px;">${p.path}</td>
                 <td style="padding:8px 16px;border-bottom:${i < topPages.length - 1 ? "1px solid #2e3148" : "none"};color:#8b8fa8;font-size:13px;text-align:right;">${Number(p.views).toLocaleString()} views</td>
-              </tr>`).join("")}
+              </tr>`,
+                    )
+                    .join("")
+            }
           </table>
         </td></tr>
 
         <!-- Top Referrers -->
-        ${topReferrers.length > 0 ? `<tr><td style="background:#1a1d27;border-left:1px solid #2e3148;border-right:1px solid #2e3148;padding:0 32px 24px;">
+        ${
+          topReferrers.length > 0
+            ? `<tr><td style="background:#1a1d27;border-left:1px solid #2e3148;border-right:1px solid #2e3148;padding:0 32px 24px;">
           <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#8b8fa8;margin-bottom:8px;">Top Referrers</div>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#222536;border-radius:6px;overflow:hidden;">
-            ${topReferrers.map((r, i) => `<tr>
+            ${topReferrers
+              .map(
+                (r, i) => `<tr>
               <td style="padding:8px 16px;border-bottom:${i < topReferrers.length - 1 ? "1px solid #2e3148" : "none"};color:#e2e4f0;font-size:13px;">${r.referrer_domain}</td>
               <td style="padding:8px 16px;border-bottom:${i < topReferrers.length - 1 ? "1px solid #2e3148" : "none"};color:#8b8fa8;font-size:13px;text-align:right;">${Number(r.visits).toLocaleString()} visits</td>
-            </tr>`).join("")}
+            </tr>`,
+              )
+              .join("")}
           </table>
-        </td></tr>` : ""}
+        </td></tr>`
+            : ""
+        }
 
         <!-- Search Terms -->
-        ${topSearchTerms.length > 0 ? `<tr><td style="background:#1a1d27;border-left:1px solid #2e3148;border-right:1px solid #2e3148;padding:0 32px 24px;">
+        ${
+          topSearchTerms.length > 0
+            ? `<tr><td style="background:#1a1d27;border-left:1px solid #2e3148;border-right:1px solid #2e3148;padding:0 32px 24px;">
           <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#8b8fa8;margin-bottom:8px;">Search Terms</div>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#222536;border-radius:6px;overflow:hidden;">
-            ${topSearchTerms.map((s, i) => `<tr>
+            ${topSearchTerms
+              .map(
+                (s, i) => `<tr>
               <td style="padding:8px 16px;border-bottom:${i < topSearchTerms.length - 1 ? "1px solid #2e3148" : "none"};color:#e2e4f0;font-size:13px;">${s.search_terms}</td>
               <td style="padding:8px 16px;border-bottom:${i < topSearchTerms.length - 1 ? "1px solid #2e3148" : "none"};color:#8b8fa8;font-size:13px;text-align:right;">${s.search_engine} · ${Number(s.count).toLocaleString()}×</td>
-            </tr>`).join("")}
+            </tr>`,
+              )
+              .join("")}
           </table>
-        </td></tr>` : ""}
+        </td></tr>`
+            : ""
+        }
 
         <!-- Footer -->
         <tr><td style="background:#1a1d27;border:1px solid #2e3148;border-top:none;border-radius:0 0 8px 8px;padding:20px 32px;text-align:center;">
-          <div style="font-size:12px;color:#8b8fa8;">Sent by Analytics Dashboard · <a href="#" style="color:#6366f1;text-decoration:none;">Manage preferences</a></div>
+          <div style="font-size:12px;color:#8b8fa8;">Sent by FL1 Analytics · <a href="#" style="color:#6366f1;text-decoration:none;">Manage preferences</a></div>
         </td></tr>
 
       </table>
