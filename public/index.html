@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <h1>📊 <span>Analytics</span> Dashboard</h1>
+  <div class="stat-pills" id="header-stats">
+    <span class="pill"><strong id="hs-today">—</strong> today</span>
+    <span class="pill"><strong id="hs-month">—</strong> this month</span>
+    <span class="pill"><strong id="hs-unique">—</strong> unique visitors</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar: Saved Queries -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Saved Queries</h2>
+    </div>
+    <div class="sidebar-list" id="saved-list">
+      <div class="sidebar-empty">No saved queries yet.<br>Run a query and save it for quick access.</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main>
+
+    <!-- Stats Row -->
+    <div class="stats-row" id="stats-row" style="display:none">
+      <div class="stat-card">
+        <div class="stat-card-label">Today's Visits</div>
+        <div class="stat-card-value" id="sc-today">—</div>
+        <div class="stat-card-sub" id="sc-today-u">— unique</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">30-Day Pageviews</div>
+        <div class="stat-card-value" id="sc-month">—</div>
+        <div class="stat-card-sub" id="sc-month-u">— unique visitors</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Pages Tracked</div>
+        <div class="stat-card-value" id="sc-pages">—</div>
+        <div class="stat-card-sub">unique paths</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-label">Active Days</div>
+        <div class="stat-card-value" id="sc-days">—</div>
+        <div class="stat-card-sub">in last 30 days</div>
+      </div>
+    </div>
+
+    <!-- Query Box -->
+    <div class="query-box">
+      <label>Ask a Question About Your Analytics</label>
+      <div class="query-input-row">
+        <input
+          type="text"
+          id="query-input"
+          class="query-input"
+          placeholder="e.g. What are the top landing pages this week?"
+          autocomplete="off"
+        />
+        <button class="btn" id="run-btn" onclick="runQuery()">
+          <span id="run-btn-icon">▶</span> Ask
+        </button>
+        <button class="btn btn-ghost" id="save-btn" onclick="saveCurrentQuery()" style="display:none">
+          ☆ Save
+        </button>
+      </div>
+      <div class="suggested-queries" id="suggestions">
+        <span class="suggest-chip" onclick="useQuery(this)">Most visited pages this week</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Top search terms from Google</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Where are visitors coming from?</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Most popular browsers and devices</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Traffic by day this month</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Top referrer sites</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Visits per hour today</span>
+        <span class="suggest-chip" onclick="useQuery(this)">Which countries visit most?</span>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="results-area" id="results-area">
+      <div class="state-empty" id="empty-state">
+        <div class="state-empty-icon">💬</div>
+        <p>Ask a question in plain English and get instant answers from your analytics data.</p>
+        <p style="font-size:12px; margin-top: 4px;">Powered by Claude — queries are translated to SQL and results are summarised automatically.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

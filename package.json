@@ -1,0 +1,22 @@
+{
+  "name": "analytics-tool",
+  "version": "1.0.0",
+  "description": "Simple website analytics tool with AI-powered queries",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^4.18.2",
+    "geoip-lite": "^1.4.10",
+    "ua-parser-js": "^1.0.37"
+  },
+  "devDependencies": {}
+}
