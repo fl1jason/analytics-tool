@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Analytics Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <header>
-  <h1>📊 <span>Analytics</span> Dashboard</h1>
+  <h1><i class="fa-solid fa-chart-line"></i> <span>Analytics</span> Dashboard</h1>
   <div class="stat-pills" id="header-stats">
     <span class="pill"><strong id="hs-today">—</strong> today</span>
     <span class="pill"><strong id="hs-month">—</strong> this month</span>
@@ -19,13 +20,50 @@
 
 <div class="layout">
 
-  <!-- Sidebar: Saved Queries -->
+  <!-- Sidebar: Saved Queries + Email Reports -->
   <aside class="sidebar">
     <div class="sidebar-header">
       <h2>Saved Queries</h2>
     </div>
     <div class="sidebar-list" id="saved-list">
       <div class="sidebar-empty">No saved queries yet.<br>Run a query and save it for quick access.</div>
+    </div>
+
+    <!-- Email Summary Section -->
+    <div class="email-section">
+      <button class="email-section-toggle" onclick="toggleEmailPanel()" id="email-toggle-btn">
+        <span><i class="fa-solid fa-envelope"></i> Weekly Report</span>
+        <i class="fa-solid fa-chevron-down" id="email-chevron"></i>
+      </button>
+      <div class="email-panel" id="email-panel">
+        <div class="send-now-row">
+          <input type="email" id="send-now-email" class="query-input" placeholder="Send report to email…" />
+          <button class="btn btn-sm" id="send-now-btn" onclick="sendReportNow()">
+            <i class="fa-solid fa-paper-plane"></i> Send Now
+          </button>
+        </div>
+        <div class="email-divider">Recurring reports</div>
+        <div id="email-schedules-list"></div>
+        <button class="btn btn-ghost btn-sm" onclick="showAddSchedule()" id="add-schedule-btn">
+          <i class="fa-solid fa-plus"></i> Add email report
+        </button>
+        <div class="email-form" id="email-form" style="display:none">
+          <input type="email" id="schedule-email" class="query-input" placeholder="you@example.com" />
+          <select id="schedule-day" class="query-input">
+            <option value="1">Every Monday</option>
+            <option value="2">Every Tuesday</option>
+            <option value="3">Every Wednesday</option>
+            <option value="4">Every Thursday</option>
+            <option value="5">Every Friday</option>
+            <option value="6">Every Saturday</option>
+            <option value="0">Every Sunday</option>
+          </select>
+          <div class="email-form-actions">
+            <button class="btn btn-sm" onclick="saveSchedule()"><i class="fa-solid fa-check"></i> Save</button>
+            <button class="btn btn-ghost btn-sm" onclick="cancelAddSchedule()">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
   </aside>
 
@@ -68,10 +106,10 @@
           autocomplete="off"
         />
         <button class="btn" id="run-btn" onclick="runQuery()">
-          <span id="run-btn-icon">▶</span> Ask
+          <span id="run-btn-icon"><i class="fa-solid fa-play"></i></span> Ask
         </button>
         <button class="btn btn-ghost" id="save-btn" onclick="saveCurrentQuery()" style="display:none">
-          ☆ Save
+          <i class="fa-regular fa-star"></i> Save
         </button>
       </div>
       <div class="suggested-queries" id="suggestions">
@@ -89,7 +127,7 @@
     <!-- Results -->
     <div class="results-area" id="results-area">
       <div class="state-empty" id="empty-state">
-        <div class="state-empty-icon">💬</div>
+        <div class="state-empty-icon"><i class="fa-regular fa-comments"></i></div>
         <p>Ask a question in plain English and get instant answers from your analytics data.</p>
         <p style="font-size:12px; margin-top: 4px;">Powered by Claude — queries are translated to SQL and results are summarised automatically.</p>
       </div>

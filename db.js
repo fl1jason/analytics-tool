@@ -45,6 +45,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pageviews_timestamp ON pageviews(timestamp);
   CREATE INDEX IF NOT EXISTS idx_pageviews_path ON pageviews(path);
   CREATE INDEX IF NOT EXISTS idx_pageviews_ip ON pageviews(ip);
+
+  CREATE TABLE IF NOT EXISTS email_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    day_of_week INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    last_sent DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 const insertPageview = db.prepare(`
@@ -95,6 +104,33 @@ const updateQueryRunCount = db.prepare(`
 
 const deleteSavedQuery = db.prepare(`DELETE FROM saved_queries WHERE id = ?`);
 
+// Email schedule queries
+const getEmailSchedules = db.prepare(`SELECT * FROM email_schedules ORDER BY created_at DESC`);
+
+const getActiveSchedulesForDay = db.prepare(`
+  SELECT * FROM email_schedules WHERE active = 1 AND day_of_week = $day
+`);
+
+const upsertEmailSchedule = db.prepare(`
+  INSERT INTO email_schedules (email, day_of_week, active)
+  VALUES ($email, $day_of_week, 1)
+  ON CONFLICT(id) DO UPDATE SET email = $email, day_of_week = $day_of_week, active = 1
+`);
+
+const insertEmailSchedule = db.prepare(`
+  INSERT INTO email_schedules (email, day_of_week) VALUES ($email, $day_of_week)
+`);
+
+const updateEmailSchedule = db.prepare(`
+  UPDATE email_schedules SET email = $email, day_of_week = $day_of_week, active = $active WHERE id = $id
+`);
+
+const markScheduleSent = db.prepare(`
+  UPDATE email_schedules SET last_sent = datetime('now') WHERE id = $id
+`);
+
+const deleteEmailSchedule = db.prepare(`DELETE FROM email_schedules WHERE id = ?`);
+
 const SCHEMA_DESCRIPTION = `
 Database: SQLite
 Table: pageviews
@@ -140,5 +176,11 @@ module.exports = {
   insertSavedQuery,
   updateQueryRunCount,
   deleteSavedQuery,
+  getEmailSchedules,
+  getActiveSchedulesForDay,
+  insertEmailSchedule,
+  updateEmailSchedule,
+  markScheduleSent,
+  deleteEmailSchedule,
   SCHEMA_DESCRIPTION,
 };

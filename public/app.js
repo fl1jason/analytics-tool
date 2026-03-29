@@ -1,13 +1,17 @@
 'use strict';
 
-let currentResult = null;   // last query result for saving
+let currentResult = null;
 let currentQuestion = '';
 let savedQueries = [];
+let emailPanelOpen = false;
+let editingScheduleId = null;
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  await Promise.all([loadStats(), loadSavedQueries()]);
+  await Promise.all([loadStats(), loadSavedQueries(), loadEmailSchedules()]);
   document.getElementById('query-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) runQuery();
   });
@@ -61,7 +65,7 @@ function renderSavedQueries() {
 
   list.innerHTML = savedQueries.map(q => `
     <div class="saved-query" data-id="${q.id}" onclick="runSavedQuery(${q.id})">
-      <span class="saved-query-icon">⚡</span>
+      <span class="saved-query-icon"><i class="fa-solid fa-bolt"></i></span>
       <div class="saved-query-body">
         <div class="saved-query-text" title="${esc(q.query)}">${esc(q.query)}</div>
         <div class="saved-query-meta">
@@ -69,7 +73,9 @@ function renderSavedQueries() {
           ${q.last_run ? ' · ' + relTime(q.last_run) : ''}
         </div>
       </div>
-      <button class="saved-query-delete" onclick="deleteSavedQuery(event, ${q.id})" title="Remove">✕</button>
+      <button class="saved-query-delete" onclick="deleteSavedQuery(event, ${q.id})" title="Remove">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
   `).join('');
 }
@@ -78,7 +84,6 @@ async function runSavedQuery(id) {
   const q = savedQueries.find(x => x.id === id);
   if (!q) return;
 
-  // Highlight active
   document.querySelectorAll('.saved-query').forEach(el => el.classList.remove('active'));
   document.querySelector(`.saved-query[data-id="${id}"]`)?.classList.add('active');
 
@@ -102,8 +107,9 @@ async function saveCurrentQuery() {
     const saved = await res.json();
     savedQueries.unshift(saved);
     renderSavedQueries();
-    document.getElementById('save-btn').textContent = '★ Saved';
-    document.getElementById('save-btn').disabled = true;
+    const saveBtn = document.getElementById('save-btn');
+    saveBtn.innerHTML = '<i class="fa-solid fa-star"></i> Saved';
+    saveBtn.disabled = true;
     toast('Query saved!');
   } catch (e) {
     toast('Failed to save query', true);
@@ -129,7 +135,6 @@ async function runQuery(savedId = null) {
   currentResult = null;
 
   setLoading(true);
-  clearEmptyState();
 
   try {
     const res = await fetch('/api/query', {
@@ -148,14 +153,12 @@ async function runQuery(savedId = null) {
     currentResult = data;
     renderResult(data, question);
 
-    // Show save button (if not already saved)
     const alreadySaved = savedQueries.some(q => q.query.toLowerCase() === question.toLowerCase());
     const saveBtn = document.getElementById('save-btn');
     saveBtn.style.display = alreadySaved ? 'none' : '';
-    saveBtn.textContent = '☆ Save';
+    saveBtn.innerHTML = '<i class="fa-regular fa-star"></i> Save';
     saveBtn.disabled = false;
 
-    // Reload saved queries to update run counts
     if (savedId) loadSavedQueries();
 
   } catch (e) {
@@ -167,7 +170,6 @@ async function runQuery(savedId = null) {
 
 function renderResult(data, question) {
   const area = document.getElementById('results-area');
-
   const noData = !data.rows || data.rows.length === 0;
 
   const tableHtml = noData
@@ -186,7 +188,6 @@ function renderResult(data, question) {
        </div>`;
 
   const cardId = 'result-' + Date.now();
-
   const card = document.createElement('div');
   card.className = 'result-card';
   card.innerHTML = `
@@ -199,15 +200,14 @@ function renderResult(data, question) {
     ${tableHtml}
     <div class="result-footer">
       <span class="result-count">${data.row_count} row${data.row_count !== 1 ? 's' : ''}</span>
-      <button class="sql-toggle" onclick="toggleSql('${cardId}')">Show SQL ▾</button>
+      <button class="sql-toggle" onclick="toggleSql('${cardId}')">
+        Show SQL <i class="fa-solid fa-chevron-down"></i>
+      </button>
     </div>
     <pre class="sql-block" id="${cardId}">${esc(data.sql || '')}</pre>
   `;
 
-  // Prepend so newest is on top
   area.insertBefore(card, area.firstChild);
-
-  // Remove old empty state if present
   document.getElementById('empty-state')?.remove();
 }
 
@@ -216,7 +216,9 @@ function toggleSql(id) {
   const btn = block?.previousElementSibling?.querySelector('.sql-toggle');
   if (!block) return;
   block.classList.toggle('visible');
-  if (btn) btn.textContent = block.classList.contains('visible') ? 'Hide SQL ▴' : 'Show SQL ▾';
+  if (btn) btn.innerHTML = block.classList.contains('visible')
+    ? 'Hide SQL <i class="fa-solid fa-chevron-up"></i>'
+    : 'Show SQL <i class="fa-solid fa-chevron-down"></i>';
 }
 
 function showError(msg) {
@@ -227,13 +229,161 @@ function showError(msg) {
   card.innerHTML = `
     <div class="result-header">
       <div class="result-header-left">
-        <div class="result-title" style="color:var(--red)">⚠ Error</div>
+        <div class="result-title" style="color:var(--red)">
+          <i class="fa-solid fa-triangle-exclamation"></i> Error
+        </div>
         <div class="result-answer">${esc(msg)}</div>
       </div>
     </div>
   `;
   area.insertBefore(card, area.firstChild);
   document.getElementById('empty-state')?.remove();
+}
+
+// ── Email Schedules ───────────────────────────────────────────────────────────
+
+async function loadEmailSchedules() {
+  try {
+    const res = await fetch('/api/email-schedules');
+    const schedules = await res.json();
+    renderEmailSchedules(schedules);
+  } catch (e) {
+    console.error('Failed to load email schedules', e);
+  }
+}
+
+function renderEmailSchedules(schedules) {
+  const list = document.getElementById('email-schedules-list');
+  if (!schedules || schedules.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = schedules.map(s => `
+    <div class="schedule-item ${s.active ? '' : 'schedule-inactive'}">
+      <div class="schedule-item-info">
+        <div class="schedule-email"><i class="fa-solid fa-envelope"></i> ${esc(s.email)}</div>
+        <div class="schedule-meta">
+          <i class="fa-regular fa-calendar"></i> Every ${DAYS[s.day_of_week]}
+          ${s.last_sent ? ' · Last sent ' + relTime(s.last_sent) : ''}
+        </div>
+      </div>
+      <div class="schedule-item-actions">
+        <button class="icon-btn" onclick="sendNow(${s.id})" title="Send now">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+        <button class="icon-btn" onclick="toggleSchedule(${s.id}, ${s.active})" title="${s.active ? 'Pause' : 'Resume'}">
+          <i class="fa-solid fa-${s.active ? 'pause' : 'play'}"></i>
+        </button>
+        <button class="icon-btn icon-btn-danger" onclick="deleteSchedule(${s.id})" title="Delete">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleEmailPanel() {
+  emailPanelOpen = !emailPanelOpen;
+  document.getElementById('email-panel').classList.toggle('open', emailPanelOpen);
+  document.getElementById('email-chevron').className = emailPanelOpen
+    ? 'fa-solid fa-chevron-up'
+    : 'fa-solid fa-chevron-down';
+}
+
+function showAddSchedule() {
+  document.getElementById('email-form').style.display = 'flex';
+  document.getElementById('add-schedule-btn').style.display = 'none';
+  document.getElementById('schedule-email').focus();
+  editingScheduleId = null;
+}
+
+function cancelAddSchedule() {
+  document.getElementById('email-form').style.display = 'none';
+  document.getElementById('add-schedule-btn').style.display = '';
+  document.getElementById('schedule-email').value = '';
+  editingScheduleId = null;
+}
+
+async function saveSchedule() {
+  const email = document.getElementById('schedule-email').value.trim();
+  const day_of_week = parseInt(document.getElementById('schedule-day').value, 10);
+
+  if (!email) { toast('Please enter an email address', true); return; }
+
+  try {
+    const res = await fetch('/api/email-schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, day_of_week }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error);
+    cancelAddSchedule();
+    await loadEmailSchedules();
+    toast(`Report scheduled for every ${DAYS[day_of_week]}`);
+  } catch (e) {
+    toast('Failed to save: ' + e.message, true);
+  }
+}
+
+async function sendReportNow() {
+  const emailInput = document.getElementById('send-now-email');
+  const btn = document.getElementById('send-now-btn');
+  const email = emailInput.value.trim();
+  if (!email) { toast('Please enter an email address', true); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
+  try {
+    const res = await fetch('/api/send-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error);
+    emailInput.value = '';
+    toast(`Report sent to ${email}!`);
+  } catch (e) {
+    toast('Failed to send: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Now';
+  }
+}
+
+async function sendNow(id) {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try {
+    const res = await fetch(`/api/email-schedules/${id}/send-now`, { method: 'POST' });
+    if (!res.ok) throw new Error((await res.json()).error);
+    toast('Summary email sent!');
+    await loadEmailSchedules();
+  } catch (e) {
+    toast('Failed to send: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+  }
+}
+
+async function toggleSchedule(id, currentlyActive) {
+  const schedules = await (await fetch('/api/email-schedules')).json();
+  const s = schedules.find(x => x.id === id);
+  if (!s) return;
+  await fetch(`/api/email-schedules/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: s.email, day_of_week: s.day_of_week, active: currentlyActive ? 0 : 1 }),
+  });
+  await loadEmailSchedules();
+  toast(currentlyActive ? 'Report paused' : 'Report resumed');
+}
+
+async function deleteSchedule(id) {
+  await fetch(`/api/email-schedules/${id}`, { method: 'DELETE' });
+  await loadEmailSchedules();
+  toast('Schedule removed');
 }
 
 // ── UI Helpers ────────────────────────────────────────────────────────────────
@@ -249,8 +399,6 @@ function setLoading(on) {
   btn.disabled = on;
   if (on) {
     icon.innerHTML = '<span class="spinner" style="display:inline-block;vertical-align:middle"></span>';
-
-    // Show a loading card
     const area = document.getElementById('results-area');
     const loader = document.createElement('div');
     loader.id = 'loader-card';
@@ -259,13 +407,9 @@ function setLoading(on) {
     area.insertBefore(loader, area.firstChild);
     document.getElementById('empty-state')?.remove();
   } else {
-    icon.innerHTML = '▶';
+    icon.innerHTML = '<i class="fa-solid fa-play"></i>';
     document.getElementById('loader-card')?.remove();
   }
-}
-
-function clearEmptyState() {
-  // Keep results, just remove the placeholder
 }
 
 function toast(msg, isError = false) {
