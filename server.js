@@ -45,21 +45,23 @@ function isAllowedOrigin(origin) {
   );
 }
 
-// Allow cross-origin for the tracker endpoint
-app.use(
-  "/collect",
-  cors({
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin not allowed: ${origin}`));
-      }
-    },
-    methods: ["POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-  }),
-);
+const collectCorsOptions = {
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin not allowed: ${origin}`));
+    }
+  },
+  methods: ["POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
+};
+
+// Explicit preflight handler — required for non-simple requests (JSON content-type)
+app.options("/collect", cors(collectCorsOptions));
+
+// Apply CORS headers to actual POST requests
+app.use("/collect", cors(collectCorsOptions));
 
 // Dashboard API routes get same-origin CORS only
 app.use("/api", cors({ origin: `http://localhost:${PORT}` }));
